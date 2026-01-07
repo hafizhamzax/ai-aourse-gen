@@ -1,8 +1,11 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
+import { UserDetailProvider } from "./_context/UserDetailContext";
+import ToasterProvider from "./_components/ToasterProvider";
+import { ThemeProvider } from "./_context/ThemeContext";
 
-import { Toaster } from 'react-hot-toast';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -21,47 +24,21 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <ClerkProvider>
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased  `}
-      >
-        {children}
-<Toaster
-          position="top-right"
-          reverseOrder={false}
-          gutter={8}
-          containerClassName=""
-          containerStyle={{}}
-          toastOptions={{
-            // Define default options
-            className: '',
-            duration: 4000,
-            style: {
-              background: '#363636',
-              color: '#fff',
-            },
-            // Default options for specific types
-            success: {
-              duration: 3000,
-              theme: {
-                primary: 'green',
-                secondary: 'black',
-              },
-            },
-            error: {
-              duration: 5000,
-              theme: {
-                primary: 'red',
-                secondary: 'black',
-              },
-            },
-          }}
-        />
+      <html lang="en" suppressHydrationWarning>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased  `}
+        >
+          <ThemeProvider>
+            <UserDetailProvider>
+              {children}
+            </UserDetailProvider>
+          </ThemeProvider>
+          <ToasterProvider />
 
 
-        
-      </body>
-    </html>
+
+        </body>
+      </html>
     </ClerkProvider>
   );
 }

@@ -4,8 +4,8 @@ import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 
 export async function PUT(req, { params }) {
-  const { courseId } = params;
-  const { title, description } = await req.json();
+  const { courseId } = await params;
+  const { title, description, chapters } = await req.json();
 
   try {
     // Fetch the course
@@ -23,11 +23,19 @@ export async function PUT(req, { params }) {
         courseOutput = {};
       }
     }
-    // Update fields
-    if (!courseOutput.course) courseOutput.course = {};
-    if (!courseOutput.course.courseOutput) courseOutput.course.courseOutput = {};
-    courseOutput.course.courseOutput.CourseName = title;
-    courseOutput.course.courseOutput.Description = description;
+
+    // Update Title/Description if provided
+    if (title || description) {
+      if (!courseOutput.course) courseOutput.course = {};
+      if (!courseOutput.course.courseOutput) courseOutput.course.courseOutput = {};
+      if (title) courseOutput.course.courseOutput.CourseName = title;
+      if (description) courseOutput.course.courseOutput.Description = description;
+    }
+
+    // Update Chapters if provided
+    if (chapters) {
+      courseOutput.Chapters = chapters;
+    }
 
     // Save back to DB
     await db.update(CourseList)

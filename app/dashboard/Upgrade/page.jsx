@@ -1,11 +1,9 @@
 'use client';
-import React, { useEffect } from 'react';
+
 import { ShieldCheck } from 'lucide-react';
 
 const UpgradePage = () => {
-  useEffect(() => {
-    alert('Upgrade features are coming soon!');
-  }, []);
+
 
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center bg-white rounded-xl shadow-md p-8 mt-10">

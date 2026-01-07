@@ -12,13 +12,12 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.12.8",
-    "@google/genai": "^0.12.0",
-    "@google/generative-ai": "^0.24.1",
     "@neondatabase/serverless": "^1.0.0",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-progress": "^1.1.2",
     "@radix-ui/react-select": "^2.1.6",
     "@radix-ui/react-slot": "^1.1.2",
+    "@supabase/supabase-js": "^2.89.0",
     "@tailwindcss/cli": "^4.0.14",
     "@tailwindcss/vite": "^4.0.14",
     "axios": "^1.9.0",
@@ -48,6 +47,8 @@
     "autoprefixer": "^10.4.21",
     "dotenv-cli": "^8.0.0",
     "drizzle-kit": "^0.31.1",
+    "eslint": "9.39.2",
+    "eslint-config-next": "16.1.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.0.14"
   }

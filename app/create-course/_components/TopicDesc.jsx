@@ -14,28 +14,28 @@ function TopicDesc() {
   };
 
   return (
-    <div className='max-w-4xl mx-auto bg-white p-6 rounded-xl space-y-6'>
+    <div className='max-w-4xl mx-auto bg-card p-6 rounded-xl space-y-6 border border-border shadow-sm'>
       <div>
-        <label className='block mb-2 text-lg font-semibold text-gray-700'>
-          Course Topic
+        <label className='block mb-2 text-lg font-semibold text-foreground'>
+          Course Topic <span className="text-red-500">*</span>
         </label>
         <Input
           placeholder='e.g., Introduction to JavaScript'
           defaultValue={userCourseInput?.topic}
           onChange={(e) => handleInputChange('topic', e.target.value)}
-          className='text-base p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none'
+          className='text-base p-4 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:outline-none bg-background text-foreground'
         />
       </div>
 
       <div>
-        <label className='block mb-2 text-lg font-semibold text-gray-700'>
-          Detailed Description
+        <label className='block mb-2 text-lg font-semibold text-foreground'>
+          Description (Optional)
         </label>
         <Textarea
           placeholder='Explain what this course will cover...'
           defaultValue={userCourseInput?.description}
           onChange={(e) => handleInputChange('description', e.target.value)}
-          className='text-base p-4 border border-gray-300 rounded-lg min-h-[150px] focus:ring-2 focus:ring-purple-400 focus:outline-none'
+          className='text-base p-4 border border-border rounded-lg min-h-[150px] focus:ring-2 focus:ring-primary focus:outline-none bg-background text-foreground'
         />
       </div>
     </div>

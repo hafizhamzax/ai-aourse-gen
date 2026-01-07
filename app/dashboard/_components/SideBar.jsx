@@ -36,7 +36,7 @@ export default function SideBar() {
     <>
       {/* Mobile Hamburger Button */}
       <button
-        className="fixed top-4 left-4 z-50 p-2 rounded-md bg-indigo-600 text-white md:hidden focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        className="fixed top-4 left-4 z-50 p-2 rounded-md bg-sidebar-primary text-sidebar-primary-foreground md:hidden focus:outline-none focus:ring-2 focus:ring-sidebar-ring"
         onClick={() => setIsMobileOpen(true)}
         aria-label="Open sidebar menu"
       >
@@ -56,7 +56,7 @@ export default function SideBar() {
       <aside
         className={`
     fixed inset-y-0 left-0 z-50
-    bg-gradient-to-b from-indigo-700 via-indigo-800 to-indigo-900 text-white shadow-lg
+    bg-sidebar text-sidebar-foreground shadow-lg
     flex flex-col justify-between
     transition-all duration-300 ease-in-out
     ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -67,7 +67,7 @@ export default function SideBar() {
       >
         {/* Header */}
         <div
-          className={`flex items-center justify-between px-4 py-5 border-b border-indigo-600 ${isCollapsed ? 'justify-center' : ''
+          className={`flex items-center justify-between px-4 py-5 border-b border-sidebar-border ${isCollapsed ? 'justify-center' : ''
             }`}
         >
           <div className='flex items-center gap-2'>
@@ -91,7 +91,7 @@ export default function SideBar() {
           </div>
           {/* Desktop collapse toggle */}
           <button
-            className="hidden md:inline-flex p-1 rounded-md text-indigo-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="hidden md:inline-flex p-1 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground focus:outline-none focus:ring-2 focus:ring-sidebar-ring"
             onClick={() => setIsCollapsed(!isCollapsed)}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
@@ -104,7 +104,7 @@ export default function SideBar() {
 
           {/* Mobile close button */}
           <button
-            className="md:hidden p-1 rounded-md text-white hover:text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="md:hidden p-1 rounded-md text-sidebar-foreground hover:text-sidebar-foreground/70 focus:outline-none focus:ring-2 focus:ring-sidebar-ring"
             onClick={() => setIsMobileOpen(false)}
             aria-label="Close sidebar menu"
           >
@@ -125,8 +125,8 @@ export default function SideBar() {
                       flex items-center gap-4 rounded-md px-3 py-3 cursor-pointer
                       transition-colors duration-200
                       ${isActive
-                        ? 'bg-indigo-500 shadow-md text-white font-semibold'
-                        : 'text-indigo-200 hover:bg-indigo-600 hover:text-white'}
+                        ? 'bg-sidebar-primary shadow-md text-sidebar-primary-foreground font-semibold'
+                        : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}
                       ${isCollapsed ? 'justify-center' : ''}
                     `}
                     aria-current={isActive ? 'page' : undefined}

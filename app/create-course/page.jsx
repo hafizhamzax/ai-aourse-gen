@@ -2,15 +2,18 @@
 
 import { Button } from '@/components/ui/button';
 import React, { useContext, useState } from 'react';
-import { GoogleGenAI } from '@google/genai';
+
+import { toast } from 'react-hot-toast'; // Assuming toast is available or use alert
 import Catagory from './_components/Catagory';
 import TopicDesc from './_components/TopicDesc';
 import Options from './_components/Options';
+import LoadingDialog from './_components/LoadingDialog';
 import { UserInputContext } from '../_context/UserInputContext';
 import uuid4 from 'uuid4';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { FaTags, FaRegListAlt, FaSlidersH } from 'react-icons/fa';
+import { useUserDetail } from '../_context/UserDetailContext';
 
 function CreateCourse() {
   const { userCourseInput } = useContext(UserInputContext);
@@ -18,6 +21,17 @@ function CreateCourse() {
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const { userDetail, loading: userDetailLoading } = useUserDetail();
+
+  React.useEffect(() => {
+    if (!userDetailLoading && userDetail?.role !== 'admin') {
+      router.replace('/dashboard');
+    }
+  }, [userDetail, userDetailLoading, router]);
+
+  if (userDetailLoading) {
+    return <div className='flex justify-center items-center h-screen'>Loading...</div>;
+  }
 
   const Step = [
     { id: 1, name: 'Category', icon: <FaTags /> },
@@ -46,7 +60,6 @@ function CreateCourse() {
       activeIndex === 2 &&
       (!userCourseInput.level ||
         !userCourseInput.displayVid ||
-        !userCourseInput.duration ||
         !userCourseInput.noChapter)
     ) {
       return true;
@@ -58,37 +71,39 @@ function CreateCourse() {
   const GenerateCourseLayout = async () => {
     setLoading(true);
 
-    const ai = new GoogleGenAI({
-      apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY,
-    });
-
-    const config = { responseMimeType: 'application/json' };
-    const model = 'gemini-2.5-flash';
-
-    const prompt = 'Generate A Course Tutorial with fields Course Name, Description, Chapter Name, About, Duration:';
-    const userPrompt = `Category: ${userCourseInput.catagory}, Topic: ${userCourseInput.topic}, Level: ${userCourseInput.level}, Duration: ${userCourseInput.duration}, NoOf Chapters: ${userCourseInput.noChapter}, in JSON format`;
-    const contents = [{ role: 'user', parts: [{ text: prompt + userPrompt }] }];
-
     try {
-      const response = await ai.models.generateContentStream({ model, config, contents });
-      let resultText = '';
-      for await (const chunk of response) resultText += chunk.text;
-      const parsed = JSON.parse(resultText);
-      SaveCourseLayoutInDb(parsed);
-    } catch (error) {
-      if (
-        error?.message?.includes('overloaded') ||
-        error?.message?.includes('UNAVAILABLE') ||
-        error?.message?.includes('503')
-      ) {
-        alert('The AI model is overloaded. Please try again shortly.');
-      } else {
-        alert('An error occurred while generating the course. Please try again.');
-      }
-      console.error('Error generating course layout:', error);
-    }
+      const prompt = 'Generate a course layout in strict JSON with fields: CourseName, Description, catagory, level, and Chapters.';
+      const userPrompt = ` Category: ${userCourseInput.catagory}; Topic: ${userCourseInput.topic}; Level: ${userCourseInput.level}; NoOfChapters: ${userCourseInput.noChapter}. Return JSON of the form {"CourseName": "...", "Description": "...", "catagory": "...", "level": "...", "Chapters": [{"name": "Chapter 1", "about": "summary"}, ...]}.  Ensure the response is valid JSON and nothing else.`;
 
-    setLoading(false);
+      const response = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt + userPrompt }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || response.statusText);
+      }
+
+      const data = await response.json();
+      let resultText = data.text;
+
+      if (!resultText) {
+        throw new Error("AI model failed to generate content.");
+      }
+
+      // Clean markdown code blocks if present
+      const cleanText = resultText.replace(/```json/g, '').replace(/```/g, '');
+      const parsed = JSON.parse(cleanText);
+
+      await SaveCourseLayoutInDb(parsed);
+    } catch (error) {
+      console.error('Error generating course:', error);
+      toast.error('Error generating course. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const SaveCourseLayoutInDb = async (courseLayout) => {
@@ -132,15 +147,14 @@ function CreateCourse() {
   return (
     <div className='min-h-screen px-4 py-8 md:px-12 lg:px-28'>
       <div className='flex flex-col items-center mb-8'>
-        <h2 className='text-3xl font-bold text-purple-600'>Create a Course</h2>
+        <h2 className='text-3xl font-bold text-primary'>Create a Course</h2>
         <div className='flex items-center mt-6 space-x-4 md:space-x-6'>
           {Step.map((item, index) => (
             <div key={item.id} className='flex items-center'>
               <div className='flex flex-col items-center'>
                 <div
-                  className={`w-12 h-12 md:w-14 md:h-14 flex items-center justify-center rounded-full text-white transition-colors duration-300 ${
-                    activeIndex >= index ? 'bg-purple-500' : 'bg-gray-300'
-                  }`}
+                  className={`w-12 h-12 md:w-14 md:h-14 flex items-center justify-center rounded-full text-foreground transition-all duration-300 ${activeIndex >= index ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30' : 'bg-muted text-muted-foreground'
+                    }`}
                 >
                   {item.icon}
                 </div>
@@ -150,9 +164,8 @@ function CreateCourse() {
               </div>
               {index < Step.length - 1 && (
                 <div
-                  className={`w-10 md:w-16 h-1 mx-2 rounded-full transition-colors duration-300 ${
-                    activeIndex > index ? 'bg-purple-500' : 'bg-gray-300'
-                  }`}
+                  className={`w-10 md:w-16 h-1 mx-2 rounded-full transition-colors duration-300 ${activeIndex > index ? 'bg-primary' : 'bg-muted'
+                    }`}
                 ></div>
               )}
             </div>
@@ -169,7 +182,7 @@ function CreateCourse() {
             <div className="flex justify-end w-full">
               <Button
                 variant="outline"
-                className="px-6 py-2 rounded-xl border cursor-pointer border-purple-400 text-purple-600 hover:bg-purple-50 transition"
+                className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
                 disabled={check()}
                 onClick={() => setActiveIndex(1)}
               >
@@ -182,14 +195,14 @@ function CreateCourse() {
             <>
               <Button
                 variant="outline"
-                className="px-6 py-2 rounded-xl border cursor-pointer border-purple-400 text-purple-600 hover:bg-purple-50 transition"
+                className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
                 onClick={() => setActiveIndex(0)}
               >
                 ⬅ Previous
               </Button>
               <Button
                 variant="outline"
-                className="px-6 py-2 rounded-xl border cursor-pointer border-purple-400 text-purple-600 hover:bg-purple-50 transition"
+                className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
                 disabled={check()}
                 onClick={() => setActiveIndex(2)}
               >
@@ -202,13 +215,13 @@ function CreateCourse() {
             <>
               <Button
                 variant="outline"
-                className="px-6 py-2 rounded-xl border cursor-pointer border-purple-400 text-purple-600 hover:bg-purple-50 transition"
+                className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
                 onClick={() => setActiveIndex(1)}
               >
                 ⬅ Previous
               </Button>
               <Button
-                className="px-6 py-2 rounded-xl cursor-pointer bg-purple-600 hover:bg-purple-700 text-white transition"
+                className="px-6 py-2 rounded-xl cursor-pointer bg-primary hover:opacity-90 text-primary-foreground shadow-lg shadow-primary/30 transition"
                 disabled={check() || loading}
                 onClick={GenerateCourseLayout}
               >
@@ -218,6 +231,7 @@ function CreateCourse() {
           )}
         </div>
       </div>
+      <LoadingDialog loading={loading} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 
 export async function GET(req, { params }) {
-  const { courseId } = params;
+  const { courseId } = await params;
   try {
     const result = await db.select().from(CourseList).where(
       eq(CourseList.courseId, courseId)

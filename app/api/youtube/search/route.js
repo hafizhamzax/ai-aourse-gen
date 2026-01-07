@@ -31,11 +31,9 @@ const YOUTUBE_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
 export async function POST(request) {
   try {
-    // Debugging: Log environment status
-    console.log('YouTube API Key:', process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ? '***' + process.env.NEXT_PUBLIC_YOUTUBE_API_KEY.slice(-4) : 'MISSING');
-    
-    const { query } = await request.json();
-    
+    const { query, maxResults, order, type, duration, relevanceLanguage, regionCode, safeSearch, channelId } = await request.json();
+    console.log("YouTube Search for:", query);
+
     if (!query) {
       return NextResponse.json(
         { error: 'Search query is required' },
@@ -44,7 +42,6 @@ export async function POST(request) {
     }
 
     if (!process.env.NEXT_PUBLIC_YOUTUBE_API_KEY) {
-      console.error('YouTube API key is not configured');
       return NextResponse.json(
         { error: 'Server configuration error' },
         { status: 500 }
@@ -54,27 +51,26 @@ export async function POST(request) {
     const params = {
       part: 'snippet',
       q: query,
-      maxResults: 1,
-      type: 'video',
+      maxResults: Math.min(Math.max(Number(maxResults) || 10, 1), 50),
+      type: type || 'video',
+      order: order || 'relevance',
+      videoDuration: duration || undefined,
+      relevanceLanguage: relevanceLanguage || undefined,
+      regionCode: regionCode || undefined,
+      safeSearch: safeSearch || 'moderate',
+      channelId: channelId || undefined,
       key: process.env.NEXT_PUBLIC_YOUTUBE_API_KEY,
     };
 
-    // Add timeout and better error handling
     const response = await axios.get(`${YOUTUBE_BASE_URL}/search`, {
       params,
-      timeout: 5000 // 5 second timeout
+      timeout: 8000
     }).catch(error => {
       if (error.response) {
-        // YouTube API returned an error
-        console.error('YouTube API Error:', error.response.data);
-        throw new Error(`YouTube API responded with ${error.response.status}: ${JSON.stringify(error.response.data.error)}`);
+        throw new Error(`YouTube API responded with ${error.response.status}: ${JSON.stringify(error.response.data?.error || error.response.data)}`);
       } else if (error.request) {
-        // No response received
-        console.error('No response from YouTube API');
         throw new Error('No response received from YouTube API');
       } else {
-        // Other errors
-        console.error('YouTube API Request Error:', error.message);
         throw error;
       }
     });
@@ -88,14 +84,8 @@ export async function POST(request) {
 
     return NextResponse.json(response.data.items);
   } catch (error) {
-    console.error('Full YouTube API Error:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch videos',
-        message: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      },
-      { status: 500 }
-    );
+    console.error("YouTube Search Error:", error.message);
+    // Return empty array instead of 500 to allow course generation to continue without video
+    return NextResponse.json([], { status: 200 });
   }
 }

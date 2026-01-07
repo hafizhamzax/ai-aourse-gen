@@ -1,11 +1,11 @@
 import { db } from '@/configs/db'; // Drizzle DB instance
 import { Chapters } from '@/configs/schema'; // Your chapters schema
-import { eq } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 
 export async function GET(req, { params }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
 
     if (!courseId) {
       return NextResponse.json({ error: 'Course ID is required' }, { status: 400 });
@@ -14,7 +14,8 @@ export async function GET(req, { params }) {
     const result = await db
       .select()
       .from(Chapters)
-      .where(eq(Chapters.courseId, courseId));
+      .where(eq(Chapters.courseId, courseId))
+      .orderBy(asc(Chapters.chapterId));
 
     if (!result || result.length === 0) {
       return NextResponse.json({ message: 'No content found for this course' }, { status: 200 });

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUserDetail } from '@/app/_context/UserDetailContext';
 
 export default function ExploreCourses() {
   const [courses, setCourses] = useState([]);
@@ -9,6 +10,7 @@ export default function ExploreCourses() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const router = useRouter();
+  const { userDetail } = useUserDetail();
 
   // Fetch courses
   useEffect(() => {
@@ -28,6 +30,10 @@ export default function ExploreCourses() {
 
   // Handle delete
   const handleDeleteCourse = async (courseId) => {
+    if (userDetail?.role !== 'admin') {
+      alert("Only admins can delete courses.");
+      return;
+    }
     const confirmed = window.confirm('Are you sure you want to delete this course?');
     if (!confirmed) return;
 
@@ -54,6 +60,7 @@ export default function ExploreCourses() {
 
   // Handle thumbnail upload
   const handleThumbnailUpload = async (e, courseId) => {
+    if (userDetail?.role !== 'admin') return;
     const file = e.target.files[0];
     if (!file) return;
 
@@ -86,33 +93,32 @@ export default function ExploreCourses() {
 
   const categories = [...new Set(courses.map(course => course.catagory))];
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Explore Courses</h1>
-          <p className="text-lg text-gray-600">Find the perfect course to expand your knowledge</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Explore Courses</h1>
+          <p className="text-lg text-muted-foreground">Find the perfect course to expand your knowledge</p>
         </div>
 
         {/* Search and Filter */}
         <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input
-            type="text"
-            placeholder="Search courses..."
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search courses..."
+              className="block w-full pl-10 pr-3 py-3 border border-border rounded-xl bg-card text-card-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
           <select
-            className="block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-lg"
+            className="block w-full pl-3 pr-10 py-3 text-base border border-border focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-xl bg-card text-card-foreground shadow-sm transition-all"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
@@ -124,58 +130,113 @@ export default function ExploreCourses() {
         </div>
 
         {/* Courses Grid */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredCourses.map((course) => (
-            <div key={course.courseId} className="bg-white shadow rounded-lg overflow-hidden">
-              {/* Thumbnail */}
-              <div className="relative w-full h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
-                {course.thumbnail ? (
-                  <img src={course.thumbnail} alt="Course Thumbnail" className="object-cover w-full h-full" />
-                ) : (
-                  <span className="text-gray-400">No Thumbnail</span>
-                )}
-                <label className="absolute bottom-2 right-2 bg-white rounded-full p-1 cursor-pointer shadow">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleThumbnailUpload(e, course.courseId)}
-                  />
-                  <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </label>
-              </div>
-
-              {/* Course Details */}
-              <div className="p-4">
-                <h3 className="text-lg font-bold text-gray-900">{course.name}</h3>
-                <p className="text-sm text-gray-600 mt-1">{course.description}</p>
-                <div className="mt-3 flex justify-between text-sm text-gray-500">
-                  <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded">{course.catagory}</span>
-                  <span className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded">{course.level}</span>
-                </div>
-
-                {/* View & Delete Buttons */}
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={() => router.push(`/create-course/${course.courseId}/content`)}
-                    className="w-full bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
-                  >
-                    View Course
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCourse(course.courseId)}
-                    className="w-full bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {loading ? (
+            // Skeleton Loaders
+            [1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-card rounded-2xl overflow-hidden shadow-sm border border-border animate-pulse">
+                <div className="w-full h-48 bg-muted"></div>
+                <div className="p-6 space-y-4">
+                  <div className="h-6 bg-muted rounded w-3/4"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 bg-muted rounded w-full"></div>
+                    <div className="h-4 bg-muted rounded w-5/6"></div>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <div className="h-6 bg-muted rounded w-20"></div>
+                    <div className="h-6 bg-muted rounded w-16"></div>
+                  </div>
+                  <div className="h-10 bg-muted rounded-lg w-full mt-4"></div>
                 </div>
               </div>
+            ))
+          ) : filteredCourses.length > 0 ? (
+            filteredCourses.map((course) => (
+              <div key={course.courseId} className="group bg-card text-card-foreground shadow-sm hover:shadow-xl border border-border rounded-2xl overflow-hidden transition-all duration-300 transform hover:-translate-y-1">
+                {/* Thumbnail */}
+                <div className="relative w-full h-48 bg-muted flex items-center justify-center overflow-hidden">
+                  {course.thumbnail ? (
+                    <img src={course.thumbnail} alt="Course Thumbnail" className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-110" />
+                  ) : (
+                    <div className="flex flex-col items-center text-muted-foreground">
+                      <svg className="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className="text-xs font-medium uppercase tracking-wider">No Preview</span>
+                    </div>
+                  )}
+                  {userDetail?.role === 'admin' && (
+                    <label className="absolute top-4 right-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full p-2 cursor-pointer shadow-lg transform translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleThumbnailUpload(e, course.courseId)}
+                      />
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </label>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                </div>
+
+                {/* Course Details */}
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-xl font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">{course.name}</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-2 min-h-[2.5rem] mb-4">{course.description}</p>
+
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                      {course.catagory}
+                    </span>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                      {course.level}
+                    </span>
+                  </div>
+
+                  {/* View & Delete Buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => router.push(`/create-course/${course.courseId}/content`)}
+                      className="flex-1 bg-primary text-primary-foreground font-bold px-4 py-2.5 rounded-xl hover:bg-primary/90 shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      View
+                    </button>
+                    {userDetail?.role === 'admin' && (
+                      <button
+                        onClick={() => handleDeleteCourse(course.courseId)}
+                        className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95"
+                        title="Delete Course"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m4-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full py-20 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+                <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 17.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-foreground">No courses found</h3>
+              <p className="text-muted-foreground mt-1">Try adjusting your search or category filter</p>
             </div>
-          ))}
+          )}
         </div>
-
       </div>
     </div>
   );

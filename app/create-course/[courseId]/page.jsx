@@ -7,10 +7,12 @@ import CourseDetail from './_components/CourseDetail';
 import ChapterList from './_components/ChapterList';
 import { db } from '@/configs/db';
 
-import { GoogleGenAI } from '@google/genai';
 import { useRouter } from 'next/navigation';
 import { Chapters } from '@/configs/schema';
 import { toast } from 'react-hot-toast'; // Add this import
+import LoadingDialog from '../_components/LoadingDialog';
+
+import { useUserDetail } from '../_context/UserDetailContext';
 
 function CourseLayout({ params }) {
   const { user } = useUser();
@@ -22,13 +24,17 @@ function CourseLayout({ params }) {
   const [errorState, setErrorState] = useState(null); // Add error state
   const router = useRouter();
   const resolvedParams = use(params);
+  const { userDetail, loading: userDetailLoading } = useUserDetail();
 
-  const ai = React.useMemo(() => {
-    if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
-      return new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
+  useEffect(() => {
+    if (!userDetailLoading && userDetail?.role !== 'admin') {
+      router.replace('/dashboard/explore');
     }
-    return null;
-  }, []);
+  }, [userDetail, userDetailLoading, router]);
+
+  if (userDetailLoading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
+
+
 
   const fetchCourse = async () => {
     if (!resolvedParams?.courseId || !user?.primaryEmailAddress?.emailAddress) return;
@@ -70,30 +76,136 @@ function CourseLayout({ params }) {
   if (loading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
   if (!course) return <div className="text-center text-gray-600 mt-10">No course found.</div>;
 
-  const generateChapterContent = async (prompt) => {
-    if (!ai) {
-      console.error("Gemini AI not initialized.");
-      return "";
-    }
-    try {
-      const config = { responseMimeType: 'text/plain' };
-      const model = 'gemini-2.5-flash';
-      const contents = [{ role: 'user', parts: [{ text: prompt }] }];
-      const response = await ai.models.generateContentStream({ model, config, contents });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const parseRetryDelayMs = (err) => {
+    const msg = String(err?.message || '');
+    const m1 = msg.match(/Please retry in ([\d.]+)s/i);
+    if (m1) return Math.ceil(parseFloat(m1[1]) * 1000);
+    const m2 = msg.match(/\"retryDelay\":\"(\d+)s\"/i);
+    if (m2) return parseInt(m2[1], 10) * 1000;
+    return null;
+  };
 
-      let resultText = '';
-      for await (const chunk of response) {
-        resultText += chunk.text;
+  const generateChapterContent = async (prompt) => {
+
+    const attempts = [0, 2000, 5000, 10000, 20000];
+    let lastError = null;
+    for (let i = 0; i < attempts.length; i++) {
+      try {
+        const resp = await fetch('/api/ai/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          const code = resp.status;
+          const retryHeader = resp.headers.get('retry-after');
+          const retryMs = retryHeader ? parseInt(retryHeader, 10) * 1000 : parseRetryDelayMs({ message: err?.error || '' }) ?? attempts[i + 1] ?? 5000;
+          if (code === 429) {
+            if (retryMs > 10000) {
+              toast.error(`Rate limit hit. Please try again in ~${Math.round(retryMs / 1000)}s.`);
+              break;
+            }
+            await sleep(retryMs);
+            continue;
+          }
+          if (code === 503) {
+            await sleep(attempts[i + 1] ?? 3000);
+            continue;
+          }
+          throw new Error(err?.error || `HTTP ${code}`);
+        }
+        const data = await resp.json();
+        const text = data?.text || '';
+        if (text && text.trim().length > 0) {
+          return text;
+        }
+        lastError = new Error('Empty response');
+      } catch (error) {
+        lastError = error;
+        const msg = String(error?.message || '').toLowerCase();
+        if (msg.includes('429') || msg.includes('quota')) {
+          const retryMs = parseRetryDelayMs(error) ?? attempts[i + 1] ?? 5000;
+          if (retryMs > 10000) {
+            toast.error(`Rate limit hit. Please try again in ~${Math.round(retryMs / 1000)}s.`);
+            break;
+          }
+          await sleep(retryMs);
+          continue;
+        }
+        if (msg.includes('503') || msg.includes('overloaded') || msg.includes('unavailable')) {
+          const retryMs = attempts[i + 1] ?? 3000;
+          await sleep(retryMs);
+          continue;
+        }
+        if (msg.includes('404') || msg.includes('not found')) {
+          console.error('Selected model not available. Ensure the configured AI model is enabled.');
+          break;
+        }
+        break;
       }
-      return resultText;
-    } catch (error) {
-      console.error("Error generating content:", error);
-      return "";
+    }
+    console.error("Error generating content:", lastError);
+    return "";
+  };
+
+  const extractJson = (text) => {
+    const s = text ?? '';
+    const start = s.indexOf('{');
+    if (start === -1) return null;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = start; i < s.length; i++) {
+      const ch = s[i];
+      if (inString) {
+        if (!escape && ch === '"') inString = false;
+        escape = ch === '\\' && !escape;
+      } else {
+        if (ch === '"') inString = true;
+        else if (ch === '{') depth++;
+        else if (ch === '}') {
+          depth--;
+          if (depth === 0) return s.slice(start, i + 1);
+        }
+      }
+    }
+    return null;
+  };
+
+  const sanitizeJson = (jsonStr) => {
+    return (jsonStr ?? '')
+      .replace(/```json|```/g, '')
+      .replace(/\u00A0/g, ' ')
+      .replace(/[\u0000-\u001F]/g, ' ')
+      .replace(/,\s*(}|\])/g, '$1')
+      .trim();
+  };
+
+  const parseGenerated = (raw) => {
+    try {
+      const cleaned = sanitizeJson(raw);
+      const inner = extractJson(cleaned) || cleaned;
+      if (!inner || inner.trim().length === 0) return null;
+      return JSON.parse(sanitizeJson(inner));
+    } catch {
+      return null;
     }
   };
 
   const GenerateChapterContent = async (course) => {
-    const chapters = course?.courseOutput?.Chapters || [];
+    let output = course?.courseOutput;
+    if (typeof output === 'string') {
+      try {
+        output = JSON.parse(output);
+      } catch (e) {
+        console.error("Error parsing courseOutput:", e);
+        output = {};
+      }
+    }
+    const chapters = output?.Chapters || [];
+    console.log("Starting generation for", chapters.length, "chapters");
     setIsGenerating(true);
     setGenerationProgress(0);
     setErrorState(null);
@@ -103,12 +215,12 @@ function CourseLayout({ params }) {
         const chapter = chapters[index];
         const courseName = course?.name || "Unnamed Course";
         const chapterName = chapter?.name || chapter?.ChapterName || `Chapter ${index + 1}`;
-        const courseCategory = course?.category || "General";
+        const courseCategory = course?.catagory || "General";
         const courseDifficulty = course?.level || "Beginner";
 
         // Enhanced, detailed prompt for better content generation
         const PROMPT = `
-        Create comprehensive educational content for an online course chapter. Generate detailed, well-structured content in JSON format.
+        Create comprehensive educational content for an online course chapter. Return only valid JSON (UTF-8), with double-quoted keys and strings, and no trailing commas.
 
         Course Details:
         - Course Name: ${courseName}
@@ -129,12 +241,11 @@ function CourseLayout({ params }) {
           "commonMistakes": ["common mistake 1", "common mistake 2", "common mistake 3"],
           "tips": ["helpful tip 1", "helpful tip 2", "helpful tip 3"],
           "quiz": [
-            {
-              "question": "Multiple choice question",
-              "options": ["A) option 1", "B) option 2", "C) option 3", "D) option 4"],
-              "correct": "A",
-              "explanation": "Why this answer is correct"
-            }
+            {"question": "Q1", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "A", "explanation": "..."},
+            {"question": "Q2", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "B", "explanation": "..."},
+            {"question": "Q3", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "C", "explanation": "..."},
+            {"question": "Q4", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "D", "explanation": "..."},
+            {"question": "Q5", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "A", "explanation": "..."}
           ],
           "furtherReading": ["Resource 1", "Resource 2", "Resource 3"],
           "estimatedTime": "X minutes to complete"
@@ -145,18 +256,14 @@ function CourseLayout({ params }) {
 
         try {
           const result = await generateChapterContent(PROMPT);
-          const cleanResult = result.replace(/```json|```/g, '').trim();
-          let content;
-          
-          try {
-            content = JSON.parse(cleanResult);
-          } catch (parseError) {
-            console.error("JSON Parse Error:", parseError);
-            // Fallback content structure
+          let content = parseGenerated(result);
+
+          if (!content) {
+            console.warn("JSON parsing failed, using fallback for chapter:", chapterName);
             content = {
               title: chapterName,
               subtitle: `Learn about ${chapterName}`,
-              description: result.substring(0, 500) + "...",
+              description: result?.substring(0, 500) || `Comprehensive guide about ${chapterName}`,
               learningObjectives: [`Understand ${chapterName}`, `Apply ${chapterName} concepts`],
               keyPoints: [`Key concept 1 about ${chapterName}`, `Key concept 2 about ${chapterName}`],
               practicalExample: "Practical example will be provided",
@@ -187,7 +294,7 @@ function CourseLayout({ params }) {
               const videoResp = await fetch('/api/youtube/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                   query: query,
                   maxResults: 10,
                   order: 'relevance',
@@ -195,27 +302,27 @@ function CourseLayout({ params }) {
                   duration: 'medium' // Prefer medium length videos (4-20 min)
                 })
               });
-              
+
               if (!videoResp.ok) {
                 throw new Error(`YouTube search failed: ${videoResp.status}`);
               }
-              
+
               const videoData = await videoResp.json();
-              
+
               if (videoData && videoData.length > 0) {
                 // Filter and rank videos based on quality indicators
                 const qualityVideos = videoData.filter(video => {
                   const title = video.snippet?.title?.toLowerCase() || '';
                   const channelTitle = video.snippet?.channelTitle?.toLowerCase() || '';
                   const description = video.snippet?.description?.toLowerCase() || '';
-                  
+
                   // Quality indicators
                   const hasEducationalKeywords = /tutorial|learn|guide|course|explained|beginner|complete|step|how to|crash course/.test(title);
-                  const hasRelevantContent = title.includes(chapterName.toLowerCase()) || 
-                                           description.includes(chapterName.toLowerCase());
+                  const hasRelevantContent = title.includes(chapterName.toLowerCase()) ||
+                    description.includes(chapterName.toLowerCase());
                   const isFromEducationalChannel = /academy|education|learning|tech|coding|university|institute|official/.test(channelTitle);
                   const hasGoodLength = !title.includes('shorts') && !title.includes('#shorts');
-                  
+
                   return hasEducationalKeywords && hasRelevantContent && hasGoodLength;
                 });
 
@@ -225,9 +332,9 @@ function CourseLayout({ params }) {
                     const title = video.snippet?.title?.toLowerCase() || '';
                     const channelTitle = video.snippet?.channelTitle?.toLowerCase() || '';
                     const description = video.snippet?.description?.toLowerCase() || '';
-                    
+
                     let score = 0;
-                    
+
                     // Scoring criteria
                     if (title.includes('tutorial')) score += 10;
                     if (title.includes('complete')) score += 8;
@@ -236,17 +343,17 @@ function CourseLayout({ params }) {
                     if (title.includes('guide')) score += 5;
                     if (title.includes('step by step')) score += 9;
                     if (title.includes('crash course')) score += 8;
-                    
+
                     // Educational channel bonus
                     if (/academy|education|learning|tech|coding|university|institute/.test(channelTitle)) score += 15;
-                    
+
                     // Exact topic match bonus
                     if (title.includes(chapterName.toLowerCase())) score += 20;
                     if (title.includes(courseCategory.toLowerCase())) score += 10;
-                    
+
                     // Penalty for clickbait indicators
                     if (/amazing|shocking|unbelievable|secret|hack/.test(title)) score -= 5;
-                    
+
                     return { ...video, qualityScore: score };
                   }).sort((a, b) => b.qualityScore - a.qualityScore);
 
@@ -266,9 +373,15 @@ function CourseLayout({ params }) {
               const fallbackResp = await fetch('/api/youtube/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: `${chapterName} tutorial` })
+                body: JSON.stringify({
+                  query: `${chapterName} ${courseCategory} tutorial`,
+                  maxResults: 10,
+                  order: 'relevance',
+                  type: 'video',
+                  duration: 'medium'
+                })
               });
-              
+
               if (fallbackResp.ok) {
                 const fallbackData = await fallbackResp.json();
                 videoId = fallbackData[0]?.id?.videoId || "";
@@ -278,13 +391,23 @@ function CourseLayout({ params }) {
             }
           }
 
-          // Save to database
-          await db.insert(Chapters).values({
-            chapterId: index,
-            courseId: course?.courseId,
-            content: content,
-            videoId: videoId
+          // Save to database via Secure API
+          const saveResp = await fetch(`/api/courses/${course?.courseId}/chapters`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chapterId: index,
+              content: content,
+              videoId: videoId
+            })
           });
+
+          if (!saveResp.ok) {
+            const errData = await saveResp.json();
+            throw new Error(errData.error || 'Failed to save chapter to DB');
+          }
 
           // Update progress
           setGenerationProgress(((index + 1) / chapters.length) * 100);
@@ -299,10 +422,10 @@ function CourseLayout({ params }) {
       setIsGenerating(false);
       setGenerationProgress(100);
       setIsContentGenerated(true);
-      
+
       // Show success message
       toast.success("Content generated successfully! You can now view the course content.");
-      
+
     } catch (error) {
       console.error("Error in GenerateChapterContent:", error);
       setIsGenerating(false);
@@ -318,7 +441,7 @@ function CourseLayout({ params }) {
     try {
       setIsGenerating(true);
       setErrorState(null);
-      
+
       const res = await fetch(`/api/publish-course/${resolvedParams.courseId}`, {
         method: 'POST',
         headers: {
@@ -327,7 +450,7 @@ function CourseLayout({ params }) {
       });
 
       const data = await res.json();
-      
+
       if (!res.ok) {
         // Show detailed error from server
         throw new Error(data.error || `HTTP ${res.status}: ${data.message || 'Unknown error'}`);
@@ -336,7 +459,7 @@ function CourseLayout({ params }) {
       if (data.success) {
         toast.success('Course published successfully!');
         setCourse(prev => ({ ...prev, isPublished: true }));
-        
+
         // Optionally redirect to published course view
         // router.push(`/courses/${resolvedParams.courseId}`);
       } else {
@@ -345,7 +468,7 @@ function CourseLayout({ params }) {
     } catch (error) {
       console.error('Full publish error:', error);
       toast.error(`Publish failed: ${error.message}`);
-      
+
       // Show detailed error in UI for debugging
       setErrorState({
         message: error.message,
@@ -366,7 +489,7 @@ function CourseLayout({ params }) {
       <h2 className='font-bold text-center text-2xl mb-8'>Course Layout</h2>
       <CourseBasicInfo course={course} setCourse={setCourse} />
       <CourseDetail course={course} />
-      <ChapterList course={course} />
+      <ChapterList course={course} setCourse={setCourse} />
 
       {/* Error Display */}
       {errorState && (
@@ -381,80 +504,63 @@ function CourseLayout({ params }) {
         </div>
       )}
 
-      <div className="my-10 text-center space-y-4">
-        {!isContentGenerated ? (
-          <button
-            onClick={() => GenerateChapterContent(course)}
-            disabled={isGenerating}
-            className={`w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-full shadow-lg hover:from-indigo-600 hover:to-purple-600 transition duration-300 ease-in-out transform hover:-translate-y-1 active:scale-95 focus:outline-none focus:ring-4 focus:ring-purple-300 focus:ring-opacity-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${isGenerating ? 'animate-pulse' : ''}`}
-          >
-            {isGenerating ? 'Generating Content...' : 'Generate Content'}
-          </button>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center justify-center space-x-2 text-green-600">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="font-medium">Content Generated Successfully!</span>
-            </div>
+
+      {/* Loading Dialog for Content Generation */}
+      <LoadingDialog loading={isGenerating} />
+
+      {/* Action Buttons Section - Only show when NOT generating */}
+      {!isGenerating && (
+        <div className="mt-10 flex flex-col md:flex-row gap-4 items-center justify-center">
+
+          {/* 1. Generate Content Button (Initial State) */}
+          {!isContentGenerated && (
             <button
-              onClick={handleViewContent}
-              className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-full shadow-lg hover:from-emerald-600 hover:to-green-600 transition duration-300 ease-in-out transform hover:-translate-y-1 active:scale-95 focus:outline-none focus:ring-4 focus:ring-green-300 focus:ring-opacity-50 cursor-pointer"
+              onClick={() => GenerateChapterContent(course)}
+              className="group relative inline-flex items-center justify-center px-8 py-4 text-base font-semibold text-white transition-all duration-200 bg-primary font-pj rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary hover:scale-105 shadow-xl shadow-primary/30"
             >
-              View Course Content
+              <span className="mr-3 text-xl">✨</span>
+              Generate Course Content
+              <div className="absolute -inset-3 rounded-xl bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:animate-shine" />
             </button>
-          </div>
-        )}
+          )}
 
-        {/* Publish Button */}
-        {isContentGenerated && !course?.isPublished && (
-          <button
-            onClick={handlePublishCourse}
-            disabled={isGenerating}
-            className={`w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-full shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 active:scale-95 focus:outline-none focus:ring-4 focus:ring-blue-300 focus:ring-opacity-50 ${
-              isGenerating ? 'opacity-50 cursor-not-allowed' : 'hover:from-cyan-600 hover:to-blue-600 cursor-pointer'
-            }`}
-          >
-            {isGenerating ? (
-              <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          {/* 2. View Course & Publish Buttons (Success State) */}
+          {isContentGenerated && (
+            <div className="flex flex-col sm:flex-row gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <button
+                onClick={handleViewContent}
+                className="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white transition-all duration-200 bg-gradient-to-r from-emerald-500 to-teal-500 border border-transparent rounded-full hover:from-emerald-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 shadow-lg hover:shadow-emerald-500/30 transform hover:-translate-y-1"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
-                Publishing...
-              </span>
-            ) : (
-              'Publish Course'
-            )}
-          </button>
-        )}
+                View Course Content
+              </button>
 
-        {/* Published Status */}
-        {course?.isPublished && (
-          <div className="flex items-center justify-center space-x-2 text-green-600">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span className="font-medium">Course Published Successfully!</span>
-          </div>
-        )}
-        
-        {/* Progress Bar */}
-        {isGenerating && (
-          <div className="mt-6 max-w-md mx-auto">
-            <div className="text-sm text-gray-600 mb-2">
-              {generationProgress < 100 ? `Generating chapters... ${Math.round(generationProgress)}%` : 'Processing...'}
+              {!course?.isPublished && (
+                <button
+                  onClick={handlePublishCourse}
+                  className="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white transition-all duration-200 bg-gradient-to-r from-blue-600 to-indigo-600 border border-transparent rounded-full hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 shadow-lg hover:shadow-blue-600/30 transform hover:-translate-y-1"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Publish Course
+                </button>
+              )}
+              {course?.isPublished && (
+                <div className="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-green-700 bg-green-100 border border-green-200 rounded-full cursor-default">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Published
+                </div>
+              )}
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-gradient-to-r from-purple-600 to-indigo-600 h-2 rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${generationProgress}%` }}
-              ></div>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

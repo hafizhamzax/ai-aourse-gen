@@ -16,12 +16,12 @@ function Catagory() { // Corrected spelling to 'Category'
   };
 
   return (
-    <div className='px-2 md:px-8 lg:px-7 py-3 '>
-      <h2 className='text-3xl font-extrabold text-gray-900 mb-8 text-center'>
+    <div className='px-2 md:px-8 lg:px-7 py-3'>
+      <h2 className='text-3xl font-extrabold text-foreground mb-8 text-center'>
         Select a Category
       </h2>
 
-      <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 ml-55  '>
+      <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 ml-55'>
         {catagoryList.map((item, index) => (
           <button
             key={index}
@@ -29,24 +29,22 @@ function Catagory() { // Corrected spelling to 'Category'
                        transition-all duration-300 ease-in-out
                        hover:scale-105 hover:shadow-lg
                        ${userCourseInput?.catagory === item.name
-                         ? 'border-purple-600 bg-purple-50 text-purple-800 shadow-md'
-                         : 'border-gray-200 bg-white text-gray-700 hover:border-purple-400'
-                       }
-                       focus:outline-none focus:ring-4 focus:ring-purple-200 focus:ring-opacity-75`}
+                ? 'border-primary bg-primary/10 text-primary shadow-md'
+                : 'border-border bg-card text-foreground hover:border-primary/50'
+              }
+                       focus:outline-none focus:ring-4 focus:ring-primary/25`}
             onClick={() => handleCatagoryChange(item.name)}
           >
             <div className='mb-4'>
               <Image
-  src={item.icon}
-  alt={item.name}
-  width={48}
-  height={48}
-  className='object-contain'
-/>
-
-
+                src={item.icon}
+                alt={item.name}
+                width={48}
+                height={48}
+                className='object-contain dark:invert'
+              />
             </div>
-            <p className='text-lg font-semibold text-center '>{item.name}</p>
+            <p className='text-lg font-semibold text-center'>{item.name}</p>
           </button>
         ))}
       </div>

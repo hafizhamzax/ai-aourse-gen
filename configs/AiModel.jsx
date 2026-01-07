@@ -1,39 +1,23 @@
-// To run this code you need to install the following dependencies:
-// npm install @google/genai mime
+// // To run this code you need to install the following dependencies:
+// // npm install @google/generative-ai
 
-const { GoogleGenAI } = require('@google/genai');
+// const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-async function main() {
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-  });
+// async function main() {
+//   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-  const config = {
-    responseMimeType: 'text/plain',
-  };
+//   // User forced model
+//   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-  const model = 'gemini-1.5-flash';
+//   const prompt = 'INSERT_INPUT_HERE';
 
-  const contents = [
-    {
-      role: 'user',
-      parts: [
-        {
-          text: 'INSERT_INPUT_HERE',
-        },
-      ],
-    },
-  ];
+//   try {
+//     const result = await model.generateContent(prompt);
+//     const response = await result.response;
+//     console.log(response.text());
+//   } catch (error) {
+//     console.error(`Model gemini-2.0-flash failed:`, error.message);
+//   }
+// }
 
-  const response = await ai.models.generateContentStream({
-    model,
-    config,
-    contents,
-  });
-
-  for await (const chunk of response) {
-    console.log(chunk.text);
-  }
-}
-
-main();
+// main();

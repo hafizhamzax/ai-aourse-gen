@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET(req, { params }) {
   try {
-    const { courseId } = params;
+    const { courseId } = await params;
 
     if (!courseId) {
       return NextResponse.json({ error: 'Course ID is required' }, { status: 400 });
