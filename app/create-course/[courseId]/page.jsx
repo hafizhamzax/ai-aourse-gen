@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser } from '@clerk/nextjs';
+
 import React, { useEffect, useState, use } from 'react';
 import CourseBasicInfo from './_components/CourseBasicInfo';
 import CourseDetail from './_components/CourseDetail';
@@ -12,10 +12,10 @@ import { Chapters } from '@/configs/schema';
 import { toast } from 'react-hot-toast'; // Add this import
 import LoadingDialog from '../_components/LoadingDialog';
 
-import { useUserDetail } from '../_context/UserDetailContext';
+import { useUserDetail } from '@/app/_context/UserDetailContext';
 
 function CourseLayout({ params }) {
-  const { user } = useUser();
+
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -32,18 +32,14 @@ function CourseLayout({ params }) {
     }
   }, [userDetail, userDetailLoading, router]);
 
-  if (userDetailLoading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
-
-
-
   const fetchCourse = async () => {
-    if (!resolvedParams?.courseId || !user?.primaryEmailAddress?.emailAddress) return;
+    if (!resolvedParams?.courseId || !userDetail?.email) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/get-course/${resolvedParams.courseId}`);
       const data = await res.json();
 
-      if (data.course && data.course.createdBy === user.primaryEmailAddress.emailAddress) {
+      if (data.course && data.course.createdBy === userDetail.email) {
         setCourse(data.course);
         // Check if content is already generated
         checkIfContentExists(data.course.courseId);
@@ -71,8 +67,9 @@ function CourseLayout({ params }) {
 
   useEffect(() => {
     fetchCourse();
-  }, [resolvedParams?.courseId, user?.primaryEmailAddress?.emailAddress]);
+  }, [resolvedParams?.courseId, userDetail?.email]);
 
+  if (userDetailLoading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
   if (loading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
   if (!course) return <div className="text-center text-gray-600 mt-10">No course found.</div>;
 
@@ -204,7 +201,7 @@ function CourseLayout({ params }) {
         output = {};
       }
     }
-    const chapters = output?.Chapters || [];
+    const chapters = output?.chapters || output?.Chapters || [];
     console.log("Starting generation for", chapters.length, "chapters");
     setIsGenerating(true);
     setGenerationProgress(0);
@@ -214,9 +211,9 @@ function CourseLayout({ params }) {
       for (let index = 0; index < chapters.length; index++) {
         const chapter = chapters[index];
         const courseName = course?.name || "Unnamed Course";
-        const chapterName = chapter?.name || chapter?.ChapterName || `Chapter ${index + 1}`;
+        const chapterName = chapter?.chapterName || chapter?.name || chapter?.ChapterName || `Chapter ${index + 1}`;
         const courseCategory = course?.catagory || "General";
-        const courseDifficulty = course?.level || "Beginner";
+        const courseDifficulty = course?.level || "Normal";
 
         // Enhanced, detailed prompt for better content generation
         const PROMPT = `
@@ -228,30 +225,33 @@ function CourseLayout({ params }) {
         - Difficulty Level: ${courseDifficulty}
         - Chapter: ${chapterName}
 
-        Generate JSON with the following structure:
-        {
-          "title": "Clear, engaging chapter title",
-          "subtitle": "Brief compelling subtitle",
-          "description": "Comprehensive 300-500 word explanation covering key concepts, importance, and real-world applications",
-          "learningObjectives": ["objective 1", "objective 2", "objective 3", "objective 4"],
-          "keyPoints": ["important point 1", "important point 2", "important point 3", "important point 4", "important point 5"],
-          "practicalExample": "Detailed real-world example with step-by-step explanation",
-          "code": "Relevant code example with comments (if applicable to the topic)",
-          "codeExplanation": "Line-by-line explanation of the code (if code provided)",
-          "commonMistakes": ["common mistake 1", "common mistake 2", "common mistake 3"],
-          "tips": ["helpful tip 1", "helpful tip 2", "helpful tip 3"],
-          "quiz": [
-            {"question": "Q1", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "A", "explanation": "..."},
-            {"question": "Q2", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "B", "explanation": "..."},
-            {"question": "Q3", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "C", "explanation": "..."},
-            {"question": "Q4", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "D", "explanation": "..."},
-            {"question": "Q5", "options": ["A) ...","B) ...","C) ...","D) ..."], "correct": "A", "explanation": "..."}
-          ],
-          "furtherReading": ["Resource 1", "Resource 2", "Resource 3"],
-          "estimatedTime": "X minutes to complete"
-        }
+        REQUIREMENTS:
+        1. description: A professional, pointed, and easy-to-understand chapter article of ~300-500 words in Markdown. Use ## for sections, **bold** for key terms, and bullet lists where helpful. Structure: short intro → core concepts → takeaway. Do NOT use junk conversation or filler. Be direct and cover main concepts clearly.
+        2. learningObjectives: 3-4 concise, specific outcomes.
+        3. keyPoints: 4-6 key takeaways — each a single clear sentence.
+        4. realWorldApplication: A brief real-world use case or scenario (3-5 lines MAX) showing how the concept is applied practically in the real world. Do not make this too long.
+        5. code: A SHORT, illustrative code snippet (10-25 lines max, if applicable to the topic). If not a programming topic, set to empty string "".
+        6. codeExplanation: 2-3 sentences explaining what the code demonstrates. Empty string if no code.
+        7. commonMistakes: 2-3 short pitfalls learners often face.
+        8. tips: 2-3 actionable pro tips.
+        9. furtherReading: 2-3 topic keywords or resource names (no URLs needed).
+        10. estimatedTime: Realistic reading time (e.g. "10-15 minutes").
 
-        Make the content engaging, educational, and appropriate for ${courseDifficulty} level students. Include practical examples and make it comprehensive.
+        Return ONLY valid JSON — no markdown fences, no extra text:
+        {
+          "title": "${chapterName}",
+          "subtitle": "A concise, engaging subtitle",
+          "description": "## Intro\\n...",
+          "learningObjectives": ["..."],
+          "keyPoints": ["..."],
+          "realWorldApplication": "...",
+          "code": "",
+          "codeExplanation": "",
+          "commonMistakes": ["..."],
+          "tips": ["..."],
+          "furtherReading": ["..."],
+          "estimatedTime": "10-15 minutes"
+        }
         `;
 
         try {
@@ -266,129 +266,14 @@ function CourseLayout({ params }) {
               description: result?.substring(0, 500) || `Comprehensive guide about ${chapterName}`,
               learningObjectives: [`Understand ${chapterName}`, `Apply ${chapterName} concepts`],
               keyPoints: [`Key concept 1 about ${chapterName}`, `Key concept 2 about ${chapterName}`],
-              practicalExample: "Practical example will be provided",
+              realWorldApplication: "Real world application will be provided",
               code: "",
               codeExplanation: "",
               commonMistakes: ["Common mistake 1", "Common mistake 2"],
               tips: ["Helpful tip 1", "Helpful tip 2"],
-              quiz: [],
               furtherReading: [],
               estimatedTime: "15 minutes"
             };
-          }
-
-          // Enhanced video search with multiple strategies
-          let videoId = "";
-          const searchQueries = [
-            `${chapterName} ${courseCategory} tutorial explained`,
-            `learn ${chapterName} ${courseCategory} beginner`,
-            `${chapterName} complete guide ${courseCategory}`,
-            `${chapterName} step by step tutorial`,
-            `${courseCategory} ${chapterName} crash course`,
-            `${chapterName} explained simply`
-          ];
-
-          // Try multiple search queries to find the best video
-          for (const query of searchQueries) {
-            try {
-              const videoResp = await fetch('/api/youtube/search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  query: query,
-                  maxResults: 10,
-                  order: 'relevance',
-                  type: 'video',
-                  duration: 'medium' // Prefer medium length videos (4-20 min)
-                })
-              });
-
-              if (!videoResp.ok) {
-                throw new Error(`YouTube search failed: ${videoResp.status}`);
-              }
-
-              const videoData = await videoResp.json();
-
-              if (videoData && videoData.length > 0) {
-                // Filter and rank videos based on quality indicators
-                const qualityVideos = videoData.filter(video => {
-                  const title = video.snippet?.title?.toLowerCase() || '';
-                  const channelTitle = video.snippet?.channelTitle?.toLowerCase() || '';
-                  const description = video.snippet?.description?.toLowerCase() || '';
-
-                  // Quality indicators
-                  const hasEducationalKeywords = /tutorial|learn|guide|course|explained|beginner|complete|step|how to|crash course/.test(title);
-                  const hasRelevantContent = title.includes(chapterName.toLowerCase()) ||
-                    description.includes(chapterName.toLowerCase());
-                  const isFromEducationalChannel = /academy|education|learning|tech|coding|university|institute|official/.test(channelTitle);
-                  const hasGoodLength = !title.includes('shorts') && !title.includes('#shorts');
-
-                  return hasEducationalKeywords && hasRelevantContent && hasGoodLength;
-                });
-
-                if (qualityVideos.length > 0) {
-                  // Rank videos by quality score
-                  const rankedVideos = qualityVideos.map(video => {
-                    const title = video.snippet?.title?.toLowerCase() || '';
-                    const channelTitle = video.snippet?.channelTitle?.toLowerCase() || '';
-                    const description = video.snippet?.description?.toLowerCase() || '';
-
-                    let score = 0;
-
-                    // Scoring criteria
-                    if (title.includes('tutorial')) score += 10;
-                    if (title.includes('complete')) score += 8;
-                    if (title.includes('beginner')) score += 7;
-                    if (title.includes('explained')) score += 6;
-                    if (title.includes('guide')) score += 5;
-                    if (title.includes('step by step')) score += 9;
-                    if (title.includes('crash course')) score += 8;
-
-                    // Educational channel bonus
-                    if (/academy|education|learning|tech|coding|university|institute/.test(channelTitle)) score += 15;
-
-                    // Exact topic match bonus
-                    if (title.includes(chapterName.toLowerCase())) score += 20;
-                    if (title.includes(courseCategory.toLowerCase())) score += 10;
-
-                    // Penalty for clickbait indicators
-                    if (/amazing|shocking|unbelievable|secret|hack/.test(title)) score -= 5;
-
-                    return { ...video, qualityScore: score };
-                  }).sort((a, b) => b.qualityScore - a.qualityScore);
-
-                  videoId = rankedVideos[0]?.id?.videoId || "";
-                  if (videoId) break; // Found a good video, stop searching
-                }
-              }
-            } catch (error) {
-              console.error(`Error searching with query "${query}":`, error);
-              continue;
-            }
-          }
-
-          // Fallback: if no video found, try a simple search
-          if (!videoId) {
-            try {
-              const fallbackResp = await fetch('/api/youtube/search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  query: `${chapterName} ${courseCategory} tutorial`,
-                  maxResults: 10,
-                  order: 'relevance',
-                  type: 'video',
-                  duration: 'medium'
-                })
-              });
-
-              if (fallbackResp.ok) {
-                const fallbackData = await fallbackResp.json();
-                videoId = fallbackData[0]?.id?.videoId || "";
-              }
-            } catch (error) {
-              console.error("Fallback video search failed:", error);
-            }
           }
 
           // Save to database via Secure API
@@ -400,7 +285,7 @@ function CourseLayout({ params }) {
             body: JSON.stringify({
               chapterId: index,
               content: content,
-              videoId: videoId
+              videoId: "" // No more videos!
             })
           });
 
@@ -424,7 +309,27 @@ function CourseLayout({ params }) {
       setIsContentGenerated(true);
 
       // Show success message
-      toast.success("Content generated successfully! You can now view the course content.");
+      toast.success("Content generated successfully! Generating quiz now...");
+
+      // Generate course quiz automatically
+      try {
+        const quizResp = await fetch(`/api/generate-course-quiz`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ courseId: course?.courseId })
+        });
+
+        if (quizResp.ok) {
+          toast.success("Quiz generated successfully!");
+        } else {
+          toast.error("Quiz generation failed, but course content is ready.");
+        }
+      } catch (error) {
+        console.error("Quiz generation error:", error);
+        toast.error("Quiz generation failed, but course content is ready.");
+      }
 
     } catch (error) {
       console.error("Error in GenerateChapterContent:", error);
@@ -506,7 +411,7 @@ function CourseLayout({ params }) {
 
 
       {/* Loading Dialog for Content Generation */}
-      <LoadingDialog loading={isGenerating} />
+      <LoadingDialog loading={isGenerating} progress={generationProgress} />
 
       {/* Action Buttons Section - Only show when NOT generating */}
       {!isGenerating && (

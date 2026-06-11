@@ -1,11 +1,12 @@
-import { UserButton } from '@clerk/nextjs'
 import React from 'react'
 import AddCourse from './_components/AddCourse'
+import UserCourseList from './_components/UserCourseList'
 
 function Dashboard() {
   return (
-    <div>
-    <AddCourse/>
+    <div className="p-4 md:p-8 space-y-8">
+      <AddCourse />
+      <UserCourseList />
     </div>
   )
 }

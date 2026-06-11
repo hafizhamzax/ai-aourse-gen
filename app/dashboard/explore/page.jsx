@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserDetail } from '@/app/_context/UserDetailContext';
+import { supabase } from '@/configs/supabase';
 
 export default function ExploreCourses() {
   const [courses, setCourses] = useState([]);
@@ -58,29 +59,50 @@ export default function ExploreCourses() {
     }
   };
 
-  // Handle thumbnail upload
+  // Handle thumbnail upload (using Supabase!)
   const handleThumbnailUpload = async (e, courseId) => {
     if (userDetail?.role !== 'admin') return;
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = reader.result;
+    try {
+      // Upload to Supabase Storage
+      const fileName = `${Date.now()}-${file.name}`;
+      const filePath = `thumbnails/${fileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from('course-images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
 
-      await fetch('/api/update-thumbnail', {
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data } = supabase.storage
+        .from('course-images')
+        .getPublicUrl(filePath);
+
+      const publicUrl = data.publicUrl;
+
+      // Save to DB
+      const res = await fetch('/api/update-thumbnail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId, thumbnail: base64String }),
+        body: JSON.stringify({ courseId, thumbnail: publicUrl }),
       });
 
-      setCourses(prev =>
-        prev.map(course =>
-          course.courseId === courseId ? { ...course, thumbnail: base64String } : course
-        )
-      );
-    };
-    reader.readAsDataURL(file);
+      if (res.ok) {
+        setCourses(prev =>
+          prev.map(course =>
+            course.courseId === courseId ? { ...course, thumbnail: publicUrl } : course
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Thumbnail upload failed:", err);
+      alert("Failed to upload thumbnail.");
+    }
   };
 
   // Filter logic
@@ -92,6 +114,11 @@ export default function ExploreCourses() {
   });
 
   const categories = [...new Set(courses.map(course => course.catagory))];
+
+  // Check if course has content
+  const hasContent = (course) => {
+    return (course.courseOutput?.chapters?.length > 0 || course.courseOutput?.Chapters?.length > 0);
+  };
 
   return (
     <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
@@ -185,7 +212,7 @@ export default function ExploreCourses() {
                 {/* Course Details */}
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-xl font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">{course.name}</h3>
+                    <h3 className="text-xl font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">{course.courseOutput?.courseName || course.courseOutput?.CourseName || course.name}</h3>
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2 min-h-[2.5rem] mb-4">{course.description}</p>
 
@@ -193,32 +220,49 @@ export default function ExploreCourses() {
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
                       {course.catagory}
                     </span>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                      {course.level}
-                    </span>
                   </div>
 
-                  {/* View & Delete Buttons */}
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => router.push(`/create-course/${course.courseId}/content`)}
-                      className="flex-1 bg-primary text-primary-foreground font-bold px-4 py-2.5 rounded-xl hover:bg-primary/90 shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      View
-                    </button>
+                  {/* View, Take Quiz & Delete Buttons */}
+                  <div className="flex flex-col gap-2">
+                    {/* First row: View Course & Take Quiz (if content exists) */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => router.push(`/create-course/${course.courseId}/content`)}
+                        className="flex-1 bg-primary text-primary-foreground font-bold px-4 py-2.5 rounded-xl hover:bg-primary/90 shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        View Course
+                      </button>
+
+                      {hasContent(course) && (
+                        <button
+                          onClick={() => router.push(`/create-course/${course.courseId}/quiz`)}
+                          className="flex-1 bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold px-4 py-2.5 rounded-xl hover:from-orange-600 hover:to-pink-600 shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Take Quiz
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Delete button (only admin) */}
                     {userDetail?.role === 'admin' && (
                       <button
                         onClick={() => handleDeleteCourse(course.courseId)}
-                        className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95"
+                        className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95 w-full"
                         title="Delete Course"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m4-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        <div className="flex items-center justify-center gap-2">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m4-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span className="text-sm font-bold">Delete Course</span>
+                        </div>
                       </button>
                     )}
                   </div>

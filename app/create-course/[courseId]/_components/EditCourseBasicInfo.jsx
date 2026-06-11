@@ -34,12 +34,15 @@ const EditCourseBasicInfo = ({ course, setCourse }) => {
       }
 
       const courseName =
+        parsedOutput?.courseName ||
         parsedOutput?.course?.courseOutput?.CourseName ||
         parsedOutput?.CourseName ||
         course.courseOutput?.CourseName ||
+        course.name ||
         'No Name';
 
       const courseDesc =
+        parsedOutput?.description ||
         parsedOutput?.course?.courseOutput?.Description ||
         parsedOutput?.Description ||
         course.courseOutput?.Description ||
@@ -63,10 +66,22 @@ const EditCourseBasicInfo = ({ course, setCourse }) => {
         output = {};
       }
     }
-    if (!output.course) output.course = {};
-    if (!output.course.courseOutput) output.course.courseOutput = {};
-    output.course.courseOutput.CourseName = title;
-    output.course.courseOutput.Description = description;
+    
+    // Support new format
+    if (output.courseName !== undefined || output.description !== undefined) {
+      output.courseName = title;
+      output.description = description;
+    } 
+    
+    // Support old format nested structure
+    if (output.course && output.course.courseOutput) {
+      output.course.courseOutput.CourseName = title;
+      output.course.courseOutput.Description = description;
+    } else if (output.CourseName !== undefined) {
+      output.CourseName = title;
+      output.Description = description;
+    }
+
     return {
       ...prev,
       courseOutput: typeof prev.courseOutput === "string" ? JSON.stringify(output) : output,

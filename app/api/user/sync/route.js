@@ -22,7 +22,7 @@ export async function POST(req) {
 
             // Add user to DB
             const newUser = await db.insert(Users).values({
-                name: user.name,
+                name: user.name || user.email.split('@')[0] || 'Anonymous',
                 email: user.email,
                 imageUrl: user.imageUrl,
                 role: role

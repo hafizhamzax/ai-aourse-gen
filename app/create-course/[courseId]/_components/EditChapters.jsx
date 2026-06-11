@@ -29,14 +29,14 @@ const EditChapters = ({ course, index, setCourse }) => {
                     output = {};
                 }
             }
-            setChapters(output?.Chapters || []);
+            setChapters(output?.chapters || output?.Chapters || []);
         }
     }, [course]);
 
     useEffect(() => {
         if (chapters[index]) {
-            setName(chapters[index].ChapterName || chapters[index].name);
-            setAbout(chapters[index].About || chapters[index].about || chapters[index].description);
+            setName(chapters[index].chapterName || chapters[index].name || chapters[index].ChapterName);
+            setAbout(chapters[index].about || chapters[index].About || chapters[index].description);
         }
     }, [chapters, index]);
 
@@ -44,10 +44,11 @@ const EditChapters = ({ course, index, setCourse }) => {
         const updatedChapters = [...chapters];
         updatedChapters[index] = {
             ...updatedChapters[index],
-            ChapterName: name,
-            About: about,
-            name: name, // Ensure compatibility
-            about: about
+            chapterName: name,
+            about: about,
+            name: name, // Compatibility
+            ChapterName: name, // Compatibility
+            About: about // Compatibility
         };
 
         // Optimistic Update
@@ -56,7 +57,12 @@ const EditChapters = ({ course, index, setCourse }) => {
             if (typeof output === "string") {
                 try { output = JSON.parse(output); } catch { output = {}; }
             }
-            output.Chapters = updatedChapters;
+            
+            if (output.chapters) {
+                output.chapters = updatedChapters;
+            } else {
+                output.Chapters = updatedChapters;
+            }
 
             return {
                 ...prev,

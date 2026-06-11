@@ -3,7 +3,7 @@ export async function POST(req) {
     const { prompt } = await req.json();
     console.log("AI Generation Request for prompt length:", prompt?.length);
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.OPENROUTER_MODEL || "kwaipilot/kat-coder-pro:free";
+    const model = process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free";
     if (!apiKey) {
       return Response.json({ error: "Missing OPENROUTER_API_KEY" }, { status: 500 });
     }

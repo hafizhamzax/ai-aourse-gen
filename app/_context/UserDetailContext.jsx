@@ -1,51 +1,77 @@
 'use client';
-import { createContext, useContext, useState, useEffect } from "react";
-import { useUser } from "@clerk/nextjs";
-import axios from "axios";
+
+import { createContext, useContext, useEffect, useState } from 'react';
+import axios from 'axios';
 
 const UserDetailContext = createContext(null);
 
 export const UserDetailProvider = ({ children }) => {
-    const { user, isLoaded } = useUser();
-    const [userDetail, setUserDetail] = useState(null);
-    const [loading, setLoading] = useState(true);
+  const [userDetail, setUserDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        if (isLoaded && user) {
-            syncUser();
-        } else if (isLoaded && !user) {
-            setLoading(false);
-        }
-    }, [user, isLoaded]);
+  const syncUser = async () => {
+    try {
+      const response = await axios.get('/api/auth/me');
+      setUserDetail(response.data?.user || null);
+      return response.data?.user || null;
+    } catch (error) {
+      setUserDetail(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const syncUser = async () => {
-        try {
-            const response = await axios.post('/api/user/sync', {
-                user: {
-                    name: user.fullName,
-                    email: user.primaryEmailAddress.emailAddress,
-                    imageUrl: user.imageUrl
-                }
-            });
-            setUserDetail(response.data.result);
-        } catch (error) {
-            console.error("Error syncing user:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+  useEffect(() => {
+    syncUser();
+  }, []);
 
-    return (
-        <UserDetailContext.Provider value={{ userDetail, setUserDetail, loading }}>
-            {children}
-        </UserDetailContext.Provider>
-    );
+  const signIn = async ({ email, password }) => {
+    const response = await axios.post('/api/auth/login', { email, password });
+    setUserDetail(response.data?.user || null);
+    return response.data;
+  };
+
+  const signUp = async ({ name, email, password, adminPassword }) => {
+    const response = await axios.post('/api/auth/signup', { name, email, password, adminPassword });
+    setUserDetail(response.data?.user || null);
+    return response.data;
+  };
+
+  const signOut = async () => {
+    await axios.post('/api/auth/logout');
+    setUserDetail(null);
+  };
+
+  const deleteAccount = async () => {
+    const response = await axios.post('/api/auth/delete-account');
+    setUserDetail(null);
+    return response.data;
+  };
+
+  return (
+    <UserDetailContext.Provider
+      value={{
+        userDetail,
+        setUserDetail,
+        loading,
+        isAuthenticated: Boolean(userDetail),
+        syncUser,
+        signIn,
+        signUp,
+        signOut,
+        deleteAccount,
+      }}
+    >
+      {children}
+    </UserDetailContext.Provider>
+  );
 };
 
 export const useUserDetail = () => {
-    const context = useContext(UserDetailContext);
-    if (!context) {
-        throw new Error("useUserDetail must be used within a UserDetailProvider");
-    }
-    return context;
+  const context = useContext(UserDetailContext);
+  if (!context) {
+    throw new Error('useUserDetail must be used within a UserDetailProvider');
+  }
+  return context;
 };

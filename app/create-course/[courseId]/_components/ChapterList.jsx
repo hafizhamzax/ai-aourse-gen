@@ -15,11 +15,13 @@ function ChapterList({ course, setCourse }) {
     }
   }
 
+  const chapters = output?.chapters || output?.Chapters || [];
+
   return (
     <div className='mt-5 px-4'>
       <h2 className='font-bold text-2xl text-foreground mb-4 border-b pb-2'>📚 Chapters</h2>
       <div className='space-y-4'>
-        {output?.Chapters?.map((chapter, index) => (
+        {chapters.map((chapter, index) => (
           <div
             key={index}
             className='flex items-center justify-between p-5 rounded-xl shadow-md border border-border bg-card hover:bg-muted/50 transition-all duration-300'
@@ -29,10 +31,12 @@ function ChapterList({ course, setCourse }) {
                 {index + 1}
               </div>
               <div>
-                <h3 className='font-semibold text-xl text-foreground'>{chapter?.ChapterName}</h3>
+                <h3 className='font-semibold text-xl text-foreground'>
+                  {chapter?.chapterName || chapter?.name || chapter?.ChapterName}
+                </h3>
                 <p className='text-sm text-muted-foreground mt-1'>
-                  {chapter?.About ||
-                    chapter?.about ||
+                  {chapter?.about ||
+                    chapter?.About ||
                     chapter?.description ||
                     "No description"}
                 </p>

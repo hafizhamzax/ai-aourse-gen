@@ -26,15 +26,29 @@ export async function PUT(req, { params }) {
 
     // Update Title/Description if provided
     if (title || description) {
-      if (!courseOutput.course) courseOutput.course = {};
-      if (!courseOutput.course.courseOutput) courseOutput.course.courseOutput = {};
-      if (title) courseOutput.course.courseOutput.CourseName = title;
-      if (description) courseOutput.course.courseOutput.Description = description;
+      // Support new format
+      if (courseOutput.courseName !== undefined || courseOutput.description !== undefined) {
+        if (title) courseOutput.courseName = title;
+        if (description) courseOutput.description = description;
+      }
+      
+      // Support old format nested structure
+      if (courseOutput.course && courseOutput.course.courseOutput) {
+        if (title) courseOutput.course.courseOutput.CourseName = title;
+        if (description) courseOutput.course.courseOutput.Description = description;
+      } else if (courseOutput.CourseName !== undefined) {
+        if (title) courseOutput.CourseName = title;
+        if (description) courseOutput.Description = description;
+      }
     }
 
     // Update Chapters if provided
     if (chapters) {
-      courseOutput.Chapters = chapters;
+      if (courseOutput.chapters) {
+        courseOutput.chapters = chapters;
+      } else {
+        courseOutput.Chapters = chapters;
+      }
     }
 
     // Save back to DB

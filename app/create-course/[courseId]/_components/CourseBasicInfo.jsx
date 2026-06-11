@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import React, { useState } from 'react';
 import { HiOutlinePuzzle } from 'react-icons/hi';
 import EditCourseBasicInfo from './EditCourseBasicInfo';
+import { supabase } from '@/configs/supabase';
 
 const CourseBasicInfo = ({ course, setCourse }) => {
   if (!course) return null;
@@ -17,11 +18,14 @@ const CourseBasicInfo = ({ course, setCourse }) => {
   }
 
   const courseName =
+    output?.courseName ||
     output?.course?.courseOutput?.CourseName ||
     course.courseOutput?.CourseName ||
+    course.name ||
     'Untitled Course';
 
   const description =
+    output?.description ||
     output?.course?.courseOutput?.Description ||
     course.courseOutput?.Description ||
     'No description provided';
@@ -32,24 +36,42 @@ const CourseBasicInfo = ({ course, setCourse }) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = reader.result;
+    try {
+      // Create a unique filename to avoid collisions
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${course.courseId}-thumbnail-${Date.now()}.${fileExt}`;
+      const filePath = `thumbnails/${fileName}`;
 
-      // Optimistic update
-      setCourse(prev => ({ ...prev, thumbnail: base64String }));
+      // 1. Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('course-images')
+        .upload(filePath, file);
 
-      try {
-        await fetch('/api/update-thumbnail', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ courseId: course.courseId, thumbnail: base64String }),
-        });
-      } catch (err) {
-        console.error("Thumbnail upload failed:", err);
+      if (uploadError) {
+        console.error("Supabase upload error:", uploadError);
+        throw uploadError;
       }
-    };
-    reader.readAsDataURL(file);
+
+      // 2. Get the public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('course-images')
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicUrlData.publicUrl;
+
+      // 3. Optimistic update UI
+      setCourse(prev => ({ ...prev, thumbnail: publicUrl }));
+
+      // 4. Save URL to Neon DB
+      await fetch('/api/update-thumbnail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: course.courseId, thumbnail: publicUrl }),
+      });
+
+    } catch (err) {
+      console.error("Thumbnail upload failed:", err);
+    }
   };
 
   return (

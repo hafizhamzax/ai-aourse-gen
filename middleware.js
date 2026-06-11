@@ -1,21 +1,31 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse } from 'next/server';
+import { SESSION_COOKIE_NAME } from './lib/auth-constants';
 
-const createRouteMatcher = (patterns) => {
-  const regexes = patterns.map((pattern) => new RegExp(pattern));
-  return (req) => regexes.some((regex) => regex.test(req.url));
-};
+const protectedPrefixes = ['/dashboard', '/create-course'];
+const authPages = ['/sign-in', '/sign-up'];
 
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)']);
+export default function middleware(req) {
+  const { pathname } = req.nextUrl;
+  const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const isProtected = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
+  const isAuthPage = authPages.some((path) => pathname === path);
 
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) await auth.protect();
-});
+  if (isProtected && !token) {
+    const loginUrl = new URL('/sign-in', req.url);
+    loginUrl.searchParams.set('next', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (isAuthPage && token) {
+    return NextResponse.redirect(new URL('/dashboard', req.url));
+  }
+
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
     '/(api|trpc)(.*)',
   ],
 };

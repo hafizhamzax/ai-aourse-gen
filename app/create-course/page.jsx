@@ -3,24 +3,26 @@
 import { Button } from '@/components/ui/button';
 import React, { useContext, useState } from 'react';
 
-import { toast } from 'react-hot-toast'; // Assuming toast is available or use alert
+import { toast } from 'react-hot-toast';
 import Catagory from './_components/Catagory';
 import TopicDesc from './_components/TopicDesc';
 import Options from './_components/Options';
 import LoadingDialog from './_components/LoadingDialog';
 import { UserInputContext } from '../_context/UserInputContext';
 import uuid4 from 'uuid4';
-import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { FaTags, FaRegListAlt, FaSlidersH } from 'react-icons/fa';
+import { FaTags, FaRegListAlt, FaSlidersH, FaMagic } from 'react-icons/fa';
 import { useUserDetail } from '../_context/UserDetailContext';
+import categoryList from '@/app/shared/catagoryList';
+import { supabase } from '@/configs/supabase';
 
 function CreateCourse() {
-  const { userCourseInput } = useContext(UserInputContext);
-  const { user } = useUser();
+  const { userCourseInput, setUserCourseInput } = useContext(UserInputContext);
   const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [fullFileText, setFullFileText] = useState(''); // Cache parsed text
   const { userDetail, loading: userDetailLoading } = useUserDetail();
 
   React.useEffect(() => {
@@ -34,9 +36,9 @@ function CreateCourse() {
   }
 
   const Step = [
-    { id: 1, name: 'Category', icon: <FaTags /> },
-    { id: 2, name: 'Topic & Desc', icon: <FaRegListAlt /> },
-    { id: 3, name: 'Options', icon: <FaSlidersH /> },
+    { id: 1, name: 'Domain', icon: <FaTags /> },
+    { id: 2, name: 'Blueprint', icon: <FaRegListAlt /> },
+    { id: 3, name: 'Configure', icon: <FaSlidersH /> },
   ];
 
   const check = () => {
@@ -49,20 +51,14 @@ function CreateCourse() {
       return true;
     }
 
-    if (
-      activeIndex === 1 &&
-      (!userCourseInput.topic || userCourseInput.topic.trim() === '')
-    ) {
-      return true;
+    if (activeIndex === 1) {
+      if (!userCourseInput.topic || userCourseInput.topic.trim() === '') return true;
     }
 
-    if (
-      activeIndex === 2 &&
-      (!userCourseInput.level ||
-        !userCourseInput.displayVid ||
-        !userCourseInput.noChapter)
-    ) {
-      return true;
+    if (activeIndex === 2) {
+      if (!userCourseInput.level || !userCourseInput.displayVid || !userCourseInput.noChapter) {
+        return true;
+      }
     }
 
     return false;
@@ -70,78 +66,94 @@ function CreateCourse() {
 
   const GenerateCourseLayout = async () => {
     setLoading(true);
+    setProgress(10);
+
+    let progressInterval = setInterval(() => {
+      setProgress(prev => Math.min(prev + 1, 95));
+    }, 600);
 
     try {
-      const prompt = 'Generate a course layout in strict JSON with fields: CourseName, Description, catagory, level, and Chapters.';
-      const userPrompt = ` Category: ${userCourseInput.catagory}; Topic: ${userCourseInput.topic}; Level: ${userCourseInput.level}; NoOfChapters: ${userCourseInput.noChapter}. Return JSON of the form {"CourseName": "...", "Description": "...", "catagory": "...", "level": "...", "Chapters": [{"name": "Chapter 1", "about": "summary"}, ...]}.  Ensure the response is valid JSON and nothing else.`;
+      const prompt = `
+        Generate A Course Tutorial Layout in Strict JSON Format.
+        Your Job: Construct a logical, step-by-step curriculum based on the following metadata.
+        
+        1. **Category**: ${userCourseInput?.catagory}
+        2. **Topic**: ${userCourseInput?.topic}
+        3. **Description**: ${userCourseInput?.description || 'General course on this topic.'}
+        4. **Level**: ${userCourseInput?.level}
+        5. **Chapter Count**: Exactly ${userCourseInput?.noChapter} chapters.
+        
+        Rules:
+        - Each chapter MUST have a "chapterName", "about" (1-2 sentences), and "duration" (e.g. "45 min").
+        - The output MUST be a valid JSON object with: "courseName", "description", and a "chapters" array.
+        - NO markdown formatting. NO conversational text.
+        
+        JSON Format:
+        {
+          "courseName": "...",
+          "description": "...",
+          "chapters": [
+            { "chapterName": "...", "about": "...", "duration": "..." }
+          ]
+        }
+      `;
 
-      const response = await fetch('/api/ai/generate', {
+      const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt + userPrompt }),
+        body: JSON.stringify({ prompt }),
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || response.statusText);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'AI Generation failed');
       }
 
-      const data = await response.json();
-      let resultText = data.text;
+      const data = await res.json();
+      let cleanJson = data.text || '';
+      cleanJson = cleanJson.replace(/```json/g, '').replace(/```/g, '').trim();
 
-      if (!resultText) {
-        throw new Error("AI model failed to generate content.");
+      const firstBrace = cleanJson.indexOf('{');
+      const lastBrace = cleanJson.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
       }
 
-      // Clean markdown code blocks if present
-      const cleanText = resultText.replace(/```json/g, '').replace(/```/g, '');
-      const parsed = JSON.parse(cleanText);
+      const courseLayout = JSON.parse(cleanJson);
+      const courseId = uuid4();
 
-      await SaveCourseLayoutInDb(parsed);
+      const saveRes = await fetch('/api/create-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          courseId,
+          name: courseLayout.courseName || userCourseInput.topic,
+          catagory: userCourseInput.catagory,
+          level: userCourseInput.level,
+          includeVideo: userCourseInput.displayVid,
+          courseOutput: courseLayout,
+          createdBy: userDetail?.email,
+          userName: userDetail?.name,
+          userProfileImage: userDetail?.imageUrl,
+        }),
+      });
+
+      if (!saveRes.ok) {
+        const errorData = await saveRes.json();
+        throw new Error(errorData.error || 'Failed to save course');
+      }
+
+      clearInterval(progressInterval);
+      setProgress(100);
+      toast.success('Course generated successfully!');
+      router.replace('/create-course/' + courseId);
     } catch (error) {
-      console.error('Error generating course:', error);
-      toast.error('Error generating course. Please try again.');
+      console.error(error);
+      toast.error(error.message || 'Failed to generate course');
     } finally {
       setLoading(false);
+      setProgress(0);
     }
-  };
-
-  const SaveCourseLayoutInDb = async (courseLayout) => {
-    setLoading(true);
-
-    if (!userCourseInput.catagory) {
-      alert('Please select a category before saving.');
-      setLoading(false);
-      return;
-    }
-
-    const id = uuid4();
-
-    const res = await fetch('/api/create-course', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        courseId: id,
-        topic: userCourseInput.topic,
-        level: userCourseInput.level,
-        catagory: userCourseInput.catagory,
-        courseOutput: courseLayout,
-        createdBy: user?.primaryEmailAddress?.emailAddress,
-        userName: user?.fullName,
-        userProfileImage: user?.imageUrl,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (data.success) {
-      router.replace('/create-course/' + id);
-    } else {
-      alert('Error saving course: ' + (data.error || 'Unknown error'));
-      console.error('Error saving course:', data.error);
-    }
-
-    setLoading(false);
   };
 
   return (
@@ -174,52 +186,38 @@ function CreateCourse() {
       </div>
 
       <div className='p-0 md:p-0'>
-        {activeIndex === 0 ? <Catagory /> : activeIndex === 1 ? <TopicDesc /> : <Options />}
+        {activeIndex === 0 ? (
+          <Catagory />
+        ) : activeIndex === 1 ? (
+          <TopicDesc />
+        ) : (
+          <Options />
+        )}
 
-        {/* ✅ Navigation Buttons */}
         <div className="flex justify-between mt-10">
-          {activeIndex === 0 && (
-            <div className="flex justify-end w-full">
+          <div className="flex w-full justify-between">
+            {activeIndex > 0 && (
+              <Button
+                variant="outline"
+                className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
+                onClick={() => setActiveIndex(activeIndex - 1)}
+              >
+                ⬅ Previous
+              </Button>
+            )}
+
+            <div className="flex-1"></div>
+
+            {activeIndex < 2 ? (
               <Button
                 variant="outline"
                 className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
                 disabled={check()}
-                onClick={() => setActiveIndex(1)}
+                onClick={() => setActiveIndex(activeIndex + 1)}
               >
                 Next ➡
               </Button>
-            </div>
-          )}
-
-          {activeIndex === 1 && (
-            <>
-              <Button
-                variant="outline"
-                className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
-                onClick={() => setActiveIndex(0)}
-              >
-                ⬅ Previous
-              </Button>
-              <Button
-                variant="outline"
-                className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
-                disabled={check()}
-                onClick={() => setActiveIndex(2)}
-              >
-                Next ➡
-              </Button>
-            </>
-          )}
-
-          {activeIndex === 2 && (
-            <>
-              <Button
-                variant="outline"
-                className="px-6 py-2 rounded-xl border cursor-pointer border-primary text-primary hover:bg-primary/10 transition"
-                onClick={() => setActiveIndex(1)}
-              >
-                ⬅ Previous
-              </Button>
+            ) : (
               <Button
                 className="px-6 py-2 rounded-xl cursor-pointer bg-primary hover:opacity-90 text-primary-foreground shadow-lg shadow-primary/30 transition"
                 disabled={check() || loading}
@@ -227,11 +225,11 @@ function CreateCourse() {
               >
                 {loading ? 'Generating...' : '🚀 Generate Course'}
               </Button>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
-      <LoadingDialog loading={loading} />
+      <LoadingDialog loading={loading} progress={progress} />
     </div>
   );
 }

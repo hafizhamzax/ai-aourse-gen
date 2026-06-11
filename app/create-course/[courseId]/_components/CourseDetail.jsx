@@ -21,24 +21,23 @@ const CourseDetail = ({ course }) => {
   const items = [
     {
       icon: <HiOutlineChartBar className="text-3xl text-primary" />,
-      label: 'Skill Level',
-      value: output?.course?.level || course.level || 'Not Specified',
+      label: 'Course Category',
+      value: course?.catagory || 'Not Specified',
     },
     {
       icon: <HiOutlineBookOpen className="text-3xl text-primary" />,
       label: 'No. of Chapters',
       value:
+        output?.chapters?.length ||
+        output?.Chapters?.length ||
         output?.course?.courseOutput?.Chapters?.length ||
         course.courseOutput?.Chapters?.length ||
         '0',
     },
     {
       icon: <HiOutlinePlayCircle className="text-3xl text-primary" />,
-      label: 'Video Included',
-      value:
-        output?.course?.includeVideo ||
-        course.includeVideo ||
-        'Not Specified',
+      label: 'Include Gamified Quiz',
+      value: 'Yes',
     },
   ];
 

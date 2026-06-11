@@ -2,17 +2,52 @@ const categoryList = [
   {
     id: 1,
     name: 'Programming',
-    icon: 'https://img.icons8.com/color/96/000000/source-code.png',
+    icon: '💻',
   },
   {
     id: 2,
     name: 'Health',
-    icon: 'https://img.icons8.com/color/96/000000/heart-health.png',
+    icon: '🏥',
   },
   {
     id: 3,
     name: 'Fitness',
-    icon: 'https://img.icons8.com/color/96/000000/dumbbell.png',
+    icon: '🏋️',
+  },
+  {
+    id: 4,
+    name: 'Science',
+    icon: '🔬',
+  },
+  {
+    id: 5,
+    name: 'Mathematics',
+    icon: '🧮',
+  },
+  {
+    id: 6,
+    name: 'Business',
+    icon: '💼',
+  },
+  {
+    id: 7,
+    name: 'History',
+    icon: '🏛️',
+  },
+  {
+    id: 8,
+    name: 'Language',
+    icon: '🗣️',
+  },
+  {
+    id: 9,
+    name: 'Law',
+    icon: '⚖️',
+  },
+  {
+    id: 10,
+    name: 'Religion',
+    icon: '🕌',
   },
 ];
 
