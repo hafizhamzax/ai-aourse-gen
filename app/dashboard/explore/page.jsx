@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserDetail } from '@/app/_context/UserDetailContext';
 import { supabase } from '@/configs/supabase';
+import Image from 'next/image';
 
 export default function ExploreCourses() {
   const [courses, setCourses] = useState([]);
@@ -183,7 +184,7 @@ export default function ExploreCourses() {
                 {/* Thumbnail */}
                 <div className="relative w-full h-48 bg-muted flex items-center justify-center overflow-hidden">
                   {course.thumbnail ? (
-                    <img src={course.thumbnail} alt="Course Thumbnail" className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-110" />
+                    <Image src={course.thumbnail} alt="Course Thumbnail" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
                   ) : (
                     <div className="flex flex-col items-center text-muted-foreground">
                       <svg className="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">

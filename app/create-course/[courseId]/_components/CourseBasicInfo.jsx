@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { HiOutlinePuzzle } from 'react-icons/hi';
 import EditCourseBasicInfo from './EditCourseBasicInfo';
 import { supabase } from '@/configs/supabase';
+import Image from 'next/image';
 
 const CourseBasicInfo = ({ course, setCourse }) => {
   if (!course) return null;
@@ -96,10 +97,11 @@ const CourseBasicInfo = ({ course, setCourse }) => {
         {/* Right Side: Thumbnail Upload */}
         <div className="flex flex-col items-center justify-center h-[250px] bg-muted/30 rounded-xl overflow-hidden relative border border-input group hover:bg-muted/50 transition-colors">
           {course.thumbnail ? (
-            <img
+            <Image
               src={course.thumbnail}
               alt="Course Thumbnail"
-              className="w-full h-full object-cover"
+              fill
+              className="object-cover"
             />
           ) : (
             <div className="text-center p-4">

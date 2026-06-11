@@ -115,7 +115,7 @@ export default function Page() {
 
               <p className="text-[10px] leading-tight text-muted-foreground">
                 Enter the secret key to create the primary admin account. 
-                If you don't know it, leave it blank to sign up as a normal user.
+                If you don&apos;t know it, leave it blank to sign up as a normal user.
                 <br/>
                 <span className="text-primary/70 mt-1 block italic">This option will disappear once the first admin is created.</span>
               </p>
