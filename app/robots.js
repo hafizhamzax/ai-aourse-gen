@@ -1,4 +1,4 @@
-import { BRAND_NAME } from '@/lib/brand';
+import { SITE_URL } from '@/lib/brand';
 
 export default function robots() {
   return {
@@ -9,6 +9,6 @@ export default function robots() {
         disallow: '/api/',
       },
     ],
-    sitemap: 'https://coursebuildai.vercel.app/sitemap.xml',
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }

@@ -1,21 +1,21 @@
-import { BRAND_NAME } from '@/lib/brand';
+import { SITE_URL } from '@/lib/brand';
 
 export default function sitemap() {
   return [
     {
-      url: 'https://coursebuildai.vercel.app',
+      url: SITE_URL,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 1,
     },
     {
-      url: 'https://coursebuildai.vercel.app/dashboard',
+      url: `${SITE_URL}/dashboard`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: 'https://coursebuildai.vercel.app/dashboard/explore',
+      url: `${SITE_URL}/dashboard/explore`,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 0.8,

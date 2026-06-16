@@ -3,7 +3,7 @@ import './globals.css';
 import { UserDetailProvider } from './_context/UserDetailContext';
 import ToasterProvider from './_components/ToasterProvider';
 import { ThemeProvider } from './_context/ThemeContext';
-import { BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand';
+import { BRAND_NAME, BRAND_TAGLINE, SITE_URL } from '@/lib/brand';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  metadataBase: new URL('https://coursebuildai.vercel.app'), // Your actual domain!
+  metadataBase: new URL(SITE_URL), // Now uses the central SITE_URL!
   title: {
     default: `${BRAND_NAME} - AI Course Generator & Learning Content Creator`,
     template: `%s | ${BRAND_NAME}`,
@@ -36,7 +36,7 @@ export const metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://coursebuildai.vercel.app",
+    url: SITE_URL,
     title: BRAND_NAME,
     description: BRAND_TAGLINE,
     siteName: BRAND_NAME,
