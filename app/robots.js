@@ -9,6 +9,6 @@ export default function robots() {
         disallow: '/api/',
       },
     ],
-    sitemap: 'https://YOUR-VERCEL-DOMAIN.vercel.app/sitemap.xml',
+    sitemap: 'https://coursebuildai.vercel.app/sitemap.xml',
   };
 }
