@@ -31,6 +31,7 @@ export const metadata = {
     "educational content AI",
     "build courses automatically",
     "CourseForge AI",
+    "AI course creator",
   ],
   authors: [{ name: "Your Name" }],
   openGraph: {
