@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  metadataBase: new URL('https://YOUR-VERCEL-DOMAIN.vercel.app'), // Update this after deployment!
+  metadataBase: new URL('https://coursebuildai.vercel.app'), // Your actual domain!
   title: {
     default: `${BRAND_NAME} - AI Course Generator & Learning Content Creator`,
     template: `%s | ${BRAND_NAME}`,
@@ -36,7 +36,7 @@ export const metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://YOUR-VERCEL-DOMAIN.vercel.app",
+    url: "https://coursebuildai.vercel.app",
     title: BRAND_NAME,
     description: BRAND_TAGLINE,
     siteName: BRAND_NAME,
