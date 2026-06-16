@@ -40,12 +40,21 @@ export const metadata = {
     title: BRAND_NAME,
     description: BRAND_TAGLINE,
     siteName: BRAND_NAME,
+    images: [
+      {
+        url: "/opengraph-image.svg",
+        width: 1200,
+        height: 630,
+        alt: "CourseForge AI - AI Course Generator",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: BRAND_NAME,
     description: BRAND_TAGLINE,
     creator: "@yourhandle",
+    images: ["/opengraph-image.svg"],
   },
   robots: {
     index: true,
@@ -57,6 +66,11 @@ export const metadata = {
       'max-image-preview': 'large',
       'max-snippet': -1,
     },
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
   },
 };
 
