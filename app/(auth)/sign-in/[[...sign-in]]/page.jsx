@@ -24,6 +24,7 @@ export default function Page() {
 
     try {
       await signIn({ email, password });
+      router.refresh();
       router.replace(nextPath);
     } catch (err) {
       setError(err?.response?.data?.error || 'Sign in failed.');

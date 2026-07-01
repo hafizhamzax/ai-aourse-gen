@@ -54,6 +54,7 @@ export default function Page() {
         password,
         adminPassword: adminSignupEnabled ? adminPassword : '',
       });
+      router.refresh();
       router.replace('/dashboard');
     } catch (err) {
       setError(err?.response?.data?.error || 'Sign up failed.');

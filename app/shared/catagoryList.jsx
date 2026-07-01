@@ -39,16 +39,6 @@ const categoryList = [
     name: 'Language',
     icon: '🗣️',
   },
-  {
-    id: 9,
-    name: 'Law',
-    icon: '⚖️',
-  },
-  {
-    id: 10,
-    name: 'Religion',
-    icon: '🕌',
-  },
 ];
 
 export default categoryList;
